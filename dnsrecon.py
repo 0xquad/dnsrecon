@@ -445,7 +445,7 @@ def brute_domain(res, dict, dom, filter=None, verbose=False, ignore_wildcard=Fal
     if re.search(r'y', continue_brt, re.I):
         # Check if Dictionary file exists
 
-        if os.path.isfile(dict):
+        if os.path.exists(dict):
             f = open(dict, 'r+')
 
             # Thread brute-force.
@@ -1435,7 +1435,7 @@ def main():
 
         elif opt in ('-D', '--dictionary'):
             #Check if the dictionary file exists
-            if os.path.isfile(arg):
+            if os.path.exists(arg):
                 dict = arg
             else:
                 print_error("File {0} does not exist!".format(arg))
