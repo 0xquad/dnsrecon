@@ -1,3 +1,9 @@
 *.orig
 *.pyc
 *.pyo
+lib/python*
+bin
+lib64
+include
+*.db
+pip-selfcheck.json
