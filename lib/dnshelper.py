@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-#    Copyright (C) 2013  Carlos Perez
+#    Copyright (C) 2017  Carlos Perez
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -121,7 +121,7 @@ class DnsHelper:
 
     def get_ip(self, hostname):
         """
-        Function resolves a host name to its given A and/or AAA record. Returns Array
+        Function resolves a host name to its given A and/or AAAA record. Returns Array
         of found hosts and IPv4 or IPv6 Address.
         """
         found_ip_add = []
@@ -302,7 +302,7 @@ class DnsHelper:
 
     def get_nsec(self, host):
         """
-        Function for querying for a NSEC record and retriving the rdata object.
+        Function for querying for a NSEC record and retrieving the rdata object.
         This function is used mostly for performing a Zone Walk against a zone.
         """
         answer = self._res.query(host, 'NSEC')
@@ -398,7 +398,7 @@ class DnsHelper:
                         for rdata in rdataset:
 
                             # Check if target is only the host name or a full FQDN.
-                            # If only a hostname we will appaned the domain name of the
+                            # If only a hostname we will append the domain name of the
                             # Zone being transfered.
                             target = rdata.target.to_text()
                             target_split = target.split('.')
@@ -652,7 +652,7 @@ class DnsHelper:
                         for rdata in rdataset:
                             print_status('\t NSEC {0}'.format(rdata.next))
                             zone_records.append({'zone_server': ns_srv, 'type': 'NSEC',
-                                                 'next': rdata.next})
+                                                 'next': rdata.next.to_text()})
 
                     for (name, rdataset) in zone.iterate_rdatasets(dns.rdatatype.NSEC3):
                         for rdata in rdataset:
