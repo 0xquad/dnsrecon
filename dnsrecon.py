@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 #    DNSRecon
 #
-#    Copyright (C) 2015  Carlos Perez
-#    Copyright (C) 2015  Alexandre Hamelin
+#    Copyright (C) 2020  Carlos Perez
+#    Copyright (C) 2020  Alexandre Hamelin
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-__version__ = '0.8.13'
+__version__ = '0.10.0'
 __author__ = 'Carlos Perez, Carlos_Perez@darkoperator.com'
 
 __doc__ = """
@@ -75,6 +75,10 @@ from lib.msf_print import *
 # Global Variables for Brute force Threads
 brtdata = []
 
+CONFIG = {
+    "disable_check_recursion": False,
+    "disable_check_bindversion": False
+}
 
 # Function Definitions
 # -----------------------------------------------------------------------------
@@ -107,7 +111,7 @@ class Worker(Thread):
                     brtdata.append(found_record)
                     for r in found_record:
                         if type(r).__name__ == "dict":
-                            for k, v in r.iteritems():
+                            for k, v in r.items():
                                 print_status("\t{0}:{1}".format(k, v))
                             print_status()
                         else:
@@ -271,6 +275,45 @@ def check_wildcard(res, domain_trg):
 
     return wildcard
 
+def check_nxdomain_hijack(nameserver):
+    """
+    Function for checking if a name server performs NXDOMAIN hijacking
+    """
+
+    test_name = ''.join(Random().sample(string.hexdigits + string.digits,
+                                        20)) + ".com"
+
+    res = dns.resolver.Resolver(configure=False)
+    res.nameservers = [nameserver]
+    res.timeout = 5.0
+
+    address = []
+
+    for record_type in ('A', 'AAAA'):
+        try:
+            answers = res.query(test_name, record_type, tcp=True)
+        except (dns.resolver.NoNameservers, dns.resolver.NXDOMAIN, dns.exception.Timeout, dns.resolver.NoAnswer, socket.error, dns.query.BadResponse):
+            continue
+
+        if answers:
+            for ardata in answers.response.answer:
+                for rdata in ardata:
+                    if rdata.rdtype == 5:
+                        if rdata.target.to_text().endswith('.'):
+                            address.append(rdata.target.to_text()[:-1])
+                        else:
+                            address.append(rdata.target.to_text())
+                    else:
+                        address.append(rdata.address)
+
+    if len(address) > 0:
+        print_error("Nameserver {} performs NXDOMAIN hijacking".format(nameserver))
+        print_error("It resolves nonexistent domains to {}".format(", ".join(address)))
+        print_error("This server has been removed from the name server list!")
+        return True
+
+    return False
+
 
 def brute_tlds(res, domain, verbose=False):
     """
@@ -289,10 +332,10 @@ def brute_tlds(res, domain, verbose=False):
     gtld = ['co', 'com',  'info', 'net', 'org']
 
     # Generic restricted TLD
-    grtld = ['biz', 'name', 'pro']
+    grtld = ['biz', 'name', 'online', 'pro', 'shop', 'site', 'top', 'xyz' ]
 
     # Sponsored TLD
-    stld = ['aereo', 'asia', 'cat', 'coop', 'edu', 'gov', 'int', 'jobs', 'mil', 'mobi', 'museum', 'post', 'tel', 'travel', 'xxx']
+    stld = ['aero', 'app', 'asia', 'cat', 'coop', 'dev', 'edu', 'gov', 'int', 'jobs', 'mil', 'mobi', 'museum', 'post', 'tel', 'travel', 'xxx']
 
     # Country Code TLD
     cctld = ['ac', 'ad', 'ae', 'af', 'ag', 'ai', 'al', 'am', 'an', 'ao', 'aq', 'ar', 'as', 'at', 'au', 'aw', 'ax', 'az', 'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bj', 'bl', 'bm', 'bn', 'bo', 'bq', 'br', 'bs', 'bt', 'bv', 'bw', 'by', 'bz', 'ca', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'cr', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'ee', 'eg', 'eh', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht', 'hu', 'id', 'ie', 'il', 'im', 'in', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mf', 'mg', 'mh', 'mk', 'ml', 'mm', 'mn', 'mo', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na', 'nc', 'ne', 'nf', 'ng', 'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'pa', 'pe', 'pf', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs', 'ru', 'rw', 'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz', 'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to', 'tp', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'um', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu', 'wf', 'ws', 'yt', 'za', 'zm', 'zw']
@@ -361,7 +404,7 @@ def brute_srv(res, domain, verbose=False):
         '_ldap._tcp.gc._msdcs.', '_kerberos._tcp.dc._msdcs.', '_kpasswd._tcp.', '_kpasswd._udp.',
         '_imap._tcp.', '_imaps._tcp.', '_submission._tcp.', '_pop3._tcp.', '_pop3s._tcp.',
         '_caldav._tcp.', '_caldavs._tcp.', '_carddav._tcp.', '_carddavs._tcp.',
-        '_x-puppet._tcp.', '_x-puppet-ca._tcp.']
+        '_x-puppet._tcp.', '_x-puppet-ca._tcp.', '_autodiscover._tcp.']
 
     try:
         for srvtype in srvrcd:
@@ -491,7 +534,7 @@ def brute_domain(res, dict, dom, filter=None, verbose=False,
     return found_hosts
 
 
-def in_cache(dict_file, ns):
+def in_cache(res, dict_file, ns):
     """
     Function for Cache Snooping, it will check a given NS server for specific
     type of records for a given domain are in it's cache.
@@ -503,7 +546,7 @@ def in_cache(dict_file, ns):
             dom_to_query = str.strip(zone)
             query = dns.message.make_query(dom_to_query, dns.rdatatype.A, dns.rdataclass.IN)
             query.flags ^= dns.flags.RD
-            answer = dns.query.udp(query, ns)
+            answer = res.query(query, ns)
             if len(answer.answer) > 0:
                 for an in answer.answer:
                     for rcd in an:
@@ -595,7 +638,7 @@ def whois_ips(res, ip_list):
     print_status("Performing Whois lookup against records found.")
     list = get_whois_nets_iplist(unique(ip_list))
     if len(list) > 0:
-        print_status("The following IP Ranges where found:")
+        print_status("The following IP Ranges were found:")
         for i in range(len(list)):
             print_status(
                 "\t {0} {1}-{2} {3}".format(str(i) + ")", list[i]["start"], list[i]["end"], list[i]["orgname"]))
@@ -627,7 +670,7 @@ def whois_ips(res, ip_list):
                     brute_reverse(res, expand_range(net_selected['start'],
                                                     net_selected['end'])))
     else:
-        print_error("No IP Ranges where found in the Whois query results")
+        print_error("No IP Ranges were found in the Whois query results")
 
     return found_records
 
@@ -654,8 +697,8 @@ def dns_record_from_dict(record_dict_list, scan_info, domain):
             try:
                 for k, v in r.items():
                     try:
-                        k = unicode(str(k))
-                        v = unicode(str(v))
+                        k = str(k)
+                        v = str(v)
                         elem.attrib[k] = v
                     except:
                         print_error("Could not convert key or value to unicode: '{0} = {1}'".format((repr(k)), (repr(v))))
@@ -837,7 +880,7 @@ def write_db(db, data):
 def get_nsec_type(domain, res):
     target = "0." + domain
 
-    answer = get_a_answer(target, res._res.nameservers[0], res._res.timeout)
+    answer = get_a_answer(res, target, res._res.nameservers[0], res._res.timeout)
     for a in answer.authority:
         if a.rdtype == 50:
             return "NSEC3"
@@ -868,7 +911,7 @@ def dns_sec_check(domain, res):
     except dns.resolver.NXDOMAIN:
         print_error("Could not resolve domain: {0}".format(domain))
         sys.exit(1)
-    
+
     except dns.resolver.NoNameservers:
         print_error("All nameservers failed to answer the DNSSEC query for {0}".format(domain))
 
@@ -883,41 +926,44 @@ from {0} second to a higher number with --lifetime <time> option."""
         print_error("DNSSEC is not configured for {0}".format(domain))
 
 
-def check_bindversion(ns_server, timeout):
+def check_bindversion(res, ns_server, timeout):
     """
     Check if the version of Bind can be queried for.
     """
     version = ""
-    request = dns.message.make_query('version.bind', 'txt', 'ch')
-    try:
-        response = dns.query.udp(request, ns_server,
-                                 timeout=timeout, one_rr_per_rrset=True)
-        if (len(response.answer) > 0):
-            version = response.answer[0].items[0].strings[0]
-            print_status("\t Bind Version for {0} {1}".format(
-                ns_server, version))
-    except (dns.resolver.NXDOMAIN, dns.exception.Timeout,
-            dns.resolver.NoAnswer, socket.error, dns.query.BadResponse):
-        return version
+
+    if not CONFIG or not CONFIG.get("disable_check_bindversion", False):
+        request = dns.message.make_query('version.bind', 'txt', 'ch')
+        try:
+            response = res.query(request, ns_server, timeout=timeout, one_rr_per_rrset=True)
+            if (len(response.answer) > 0):
+                print_status("\t Bind Version for {0} {1}".format(ns_server, response.answer[0].items[0].strings[0]))
+                version = response.answer[0].items[0].strings[0]
+        except (dns.resolver.NXDOMAIN, dns.exception.Timeout, dns.resolver.NoAnswer, socket.error, dns.query.BadResponse):
+            pass
+
     return version
 
 
-def check_recursive(ns_server, timeout):
+def check_recursive(res, ns_server, timeout):
     """
     Check if a NS Server is recursive.
     """
     is_recursive = False
-    query = dns.message.make_query('www.google.com.', dns.rdatatype.NS)
-    try:
-        response = dns.query.udp(query, ns_server, timeout)
-        recursion_flag_pattern = "\.*RA\.*"
-        flags = dns.flags.to_text(response.flags)
-        result = re.findall(recursion_flag_pattern, flags)
-        if (result):
-            print_error("\t Recursion enabled on NS Server {0}".format(ns_server))
-        is_recursive = True
-    except (socket.error, dns.exception.Timeout):
-        return is_recursive
+
+    if not CONFIG or not CONFIG.get("disable_check_recursion", False):
+        query = dns.message.make_query('www.google.com.', dns.rdatatype.NS)
+        try:
+            response = res.query(query, ns_server, timeout)
+            recursion_flag_pattern = "\.*RA\.*"
+            flags = dns.flags.to_text(response.flags)
+            result = re.findall(recursion_flag_pattern, flags)
+            if (result):
+                print_error("\t Recursion enabled on NS Server {0}".format(ns_server))
+            is_recursive = True
+        except (socket.error, dns.exception.Timeout):
+            pass
+
     return is_recursive
 
 
@@ -958,7 +1004,6 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
         dns_sec_check(domain, res)
 
         # Enumerate SOA Record
-
         try:
             found_soa_records = res.get_soa()
             for found_soa_record in found_soa_records:
@@ -979,8 +1024,8 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
                 print_status("\t {0} {1} {2}".format(ns_rcrd[0], ns_rcrd[1], ns_rcrd[2]))
 
                 # Save dictionary of returned record
-                recursive = check_recursive(ns_rcrd[2], res._res.timeout)
-                bind_ver = check_bindversion(ns_rcrd[2], res._res.timeout)
+                recursive = check_recursive(res, ns_rcrd[2], res._res.timeout)
+                bind_ver = check_bindversion(res, ns_rcrd[2], res._res.timeout)
                 returned_records.extend([
                     {"type": ns_rcrd[0], "target": ns_rcrd[1], "address": ns_rcrd[2], "recursive": str(recursive),
                      "Version": bind_ver}])
@@ -988,6 +1033,9 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
 
         except dns.resolver.NoAnswer:
             print_error("Could not Resolve NS Records for {0}".format(domain))
+        except dns.resolver.NoNameservers:
+            print_error("All nameservers failed to answer the NS query for {0}".format(domain))
+            sys.exit(1)
 
         # Enumerate MX Records
         try:
@@ -1001,6 +1049,8 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
 
         except dns.resolver.NoAnswer:
             print_error("Could not Resolve MX Records for {0}".format(domain))
+        except dns.resolver.NoNameservers:
+            print_error("All nameservers failed to answer the MX query for {0}".format(domain))
 
         # Enumerate A Record for the targeted Domain
         for a_rcrd in res.get_ip(domain):
@@ -1051,7 +1101,7 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
                 returned_records.extend(
                     brute_reverse(res, unique(found_spf_ranges)))
             else:
-                print_status("No IP Ranges where found in SPF and TXT Records")
+                print_status("No IP Ranges were found in SPF and TXT Records")
 
         # Enumerate SRV Records for the targeted Domain
         print_status("Enumerating SRV Records")
@@ -1074,7 +1124,7 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
         # Do Bing Search enumeration if selected
         if do_bing:
             print_status("Performing Bing Search Enumeration")
-            bing_rcd = se_result_process(res, scrape_google(domain))
+            bing_rcd = se_result_process(res, scrape_bing(domain))
             if bing_rcd:
                 for r in bing_rcd:
                     if "address" in bing_rcd:
@@ -1105,7 +1155,7 @@ def general_enum(res, domain, do_axfr, do_google, do_bing, do_spf, do_whois, do_
         #sys.exit(0)
 
 
-def query_ds(target, ns, timeout=5.0):
+def query_ds(res, target, ns, timeout=5.0):
     """
     Function for performing DS Record queries. Returns answer object. Since a
     timeout will break the DS NSEC chain of a zone walk it will exit if a timeout
@@ -1116,7 +1166,7 @@ def query_ds(target, ns, timeout=5.0):
         query.flags += dns.flags.CD
         query.use_edns(edns=True, payload=4096)
         query.want_dnssec(True)
-        answer = dns.query.udp(query, ns, timeout)
+        answer = res.query(query, ns, timeout)
     except dns.exception.Timeout:
         print_error("A timeout error occurred please make sure you can reach the target DNS Servers")
         print_error("directly and requests are not being filtered. Increase the timeout from {0} second".format(timeout))
@@ -1215,18 +1265,18 @@ def lookup_next(target, res):
     return returned_records
 
 
-def get_a_answer(target, ns, timeout):
+def get_a_answer(res, target, ns, timeout):
     query = dns.message.make_query(target, dns.rdatatype.A, dns.rdataclass.IN)
     query.flags += dns.flags.CD
     query.use_edns(edns=True, payload=4096)
     query.want_dnssec(True)
-    answer = dns.query.udp(query, ns, timeout)
+    answer = res.query(query, ns, timeout)
     return answer
 
 
-def get_next(target, ns, timeout):
+def get_next(res, target, ns, timeout):
     next_host = None
-    response = get_a_answer(target, ns, timeout)
+    response = get_a_answer(res, target, ns, timeout)
     for a in response.authority:
         if a.rdtype == 47:
             for r in a:
@@ -1252,7 +1302,7 @@ def ds_zone_walk(res, domain):
         res = DnsHelper(domain, soa_rcd, 3)
         nameserver = soa_rcd
     except:
-        print_error("This zone appears to be miss configured, no SOA record found.")
+        print_error("This zone appears to be misconfigured, no SOA record found.")
 
     timeout = res._res.timeout
 
@@ -1266,10 +1316,10 @@ def ds_zone_walk(res, domain):
         lambda h, hc, dc: "0.{0}".format(h),
 
         # Append a hyphen to the host portion
-        lambda h, hc, dc: "{0}-.{1}".format(hc, dc),
+        lambda h, hc, dc: "{0}-.{1}".format(hc, dc) if hc else None,
 
         # Double the last character of the host portion
-        lambda h, hc, dc: "{0}{1}.{2}".format(hc, hc[-1], dc)
+        lambda h, hc, dc: "{0}{1}.{2}".format(hc, hc[-1], dc) if hc else None
     ]
 
     pending = set([domain])
@@ -1285,18 +1335,32 @@ def ds_zone_walk(res, domain):
             records.extend(lookup_next(hostname, res))
 
             # Arrange the arguments for the transformations
-            fields = re.search("(^[^.]*).(\S*)", hostname)
-            params = [hostname, fields.group(1), fields.group(2)]
+            fields = re.search("^(^[^.]*)\.(\S+\.\S*)$", hostname)
+
+            domain_portion = hostname
+            if fields and fields.group(2):
+                domain_portion = fields.group(2)
+
+            host_portion = ""
+            if fields and fields.group(1):
+                host_portion = fields.group(1)
+
+            params = [hostname, host_portion, domain_portion]
+
+            walk_filter = "." + domain_portion
+            walk_filter_offset = len(walk_filter) + 1
 
             for transformation in transformations:
                 # Apply the transformation
                 target = transformation(*params)
+                if not target:
+                    continue
 
                 # Perform a DNS query for the target and process the response
                 if not nameserver:
-                    response = get_a_answer(target, res._res.nameservers[0], timeout)
+                    response = get_a_answer(res, target, res._res.nameservers[0], timeout)
                 else:
-                    response = get_a_answer(target, nameserver, timeout)
+                    response = get_a_answer(res, target, nameserver, timeout)
                 for a in response.authority:
                     if a.rdtype != 47:
                         continue
@@ -1306,7 +1370,10 @@ def ds_zone_walk(res, domain):
                     #   2) The subsequent existing hostname that is signed
                     # Add the latter to our list of pending hostnames
                     for r in a:
-                        pending.add(r.next.to_text()[:-1])
+                        # Avoid walking outside of the target domain. This
+                        # happens with certain misconfigured domains.
+                        if r.next.to_text()[-walk_filter_offset:-1] == walk_filter:
+                            pending.add(r.next.to_text()[:-1])
 
             # Ensure nothing pending has already been queried
             pending -= finished
@@ -1321,6 +1388,12 @@ sure you can reach the target DNS Servers directly and requests are
 not being filtered. Increase the timeout to a higher number with
 --lifetime <time> option."""
         print_error(msg)
+
+    except (EOFError):
+        print_error("SoA nameserver {} failed to answer the DNSSEC query for {}".format(nameserver, target))
+
+    except (socket.error):
+        print_error("SoA nameserver {} failed to answer the DNSSEC query for {}".format(nameserver, domain))
 
     # Give a summary of the walk
     if len(records) > 0:
@@ -1339,6 +1412,7 @@ def usage():
     print("   -d, --domain      <domain>   Target domain.")
     print("   -r, --range       <range>    IP range for reverse lookup brute force in formats (first-last) or in (range/bitmask).")
     print("   -n, --name_server <name>     Domain server to use. If none is given, the SOA of the target will be used.")
+    print("                                Multiple servers can be specified using a comma separated list.")
     print("   -D, --dictionary  <file>     Dictionary file of subdomain and hostnames to use for brute force.")
     print("   -f                           Filter out of brute force domain lookup, records that resolve to the wildcard defined")
     print("                                IP address when saving records.")
@@ -1365,10 +1439,13 @@ def usage():
     print("   -z                           Performs a DNSSEC zone walk with standard enumeration.")
     print("   --threads         <number>   Number of threads to use in reverse lookups, forward lookups, brute force and SRV")
     print("                                record enumeration.")
+    print("   --tcp                        Force using TCP protocol when making DNS queries.")
     print("   --lifetime        <number>   Time to wait for a server to response to a query.")
     print("   --db              <file>     SQLite 3 file to save found records.")
     print("   --xml             <file>     XML file to save found records.")
     print("   --iw                         Continue brute forcing a domain even if a wildcard records are discovered.")
+    print("   --disable_check_recursion    Disables check for recursion on name servers.")
+    print("   --disable_check_bindversion  Disables check for BIND version on name servers.")
     print("   -c, --csv         <file>     Comma separated value file.")
     print("   -j, --json        <file>     JSON file.")
     print("   -v                           Show attempts in the brute force modes.")
@@ -1420,7 +1497,7 @@ def main():
     parser = argparse.ArgumentParser()
     try:
         parser.add_argument("-d", "--domain", type=str, dest="domain", help="Target domain.")
-        parser.add_argument("-n", "--name_server",type=str, dest="ns_server", help="Domain server to use. If none is given,    the SOA of the target will be used.")
+        parser.add_argument("-n", "--name_server",type=str, dest="ns_server", help="Domain server to use. If none is given,    the SOA of the target will be used. Multiple servers can be specified using a comma separated list.")
         parser.add_argument("-r", "--range",type=str, dest="range", help="IP range for reverse lookup brute force in formats   (first-last) or in (range/bitmask).")
         parser.add_argument("-D", "--dictionary",type=str, dest="dictionary", help="Dictionary file of subdomain and hostnames to use for brute force. Filter out of brute force domain lookup, records that resolve to the wildcard defined IP address when saving records.")
         parser.add_argument("-f", help="Filter out of brute force domain lookup, records that resolve to the wildcard defined IP address when saving records.", action="store_true")
@@ -1434,18 +1511,24 @@ def main():
         parser.add_argument("-z", help="Performs a DNSSEC zone walk with standard enumeration.", action="store_true")
         parser.add_argument("--threads", type=int, dest="threads", help="Number of threads to use in reverse lookups, forward lookups, brute force and SRV record enumeration.")
         parser.add_argument("--lifetime", type=int, dest="lifetime", help="Time to wait for a server to response to a query.")
+        parser.add_argument("--tcp", dest="tcp", help="Use TCP protocol to make queries.", action="store_true")
         parser.add_argument("--db", type=str, dest="db", help="SQLite 3 file to save found records.")
         parser.add_argument("-x", "--xml", type=str, dest="xml", help="XML file to save found records.")
         parser.add_argument("-c", "--csv", type=str, dest="csv", help="Comma separated value file.")
         parser.add_argument("-j", "--json", type=str, dest="json", help="JSON file.")
         parser.add_argument("--iw", help="Continue brute forcing a domain even if a wildcard records are discovered.", action="store_true")
+        parser.add_argument("--disable_check_recursion", help="Disables check for recursion on name servers", action="store_true")
+        parser.add_argument("--disable_check_bindversion", help="Disables check for BIND version on name servers", action="store_true")
         parser.add_argument("-v", help="Enable verbose", action="store_true")
         arguments = parser.parse_args()
 
+    except SystemExit:
+        # Handle exit() from passing --help
+        raise
     except:
         print_error("Wrong Option Provided!")
         parser.print_help()
-        sys.exit(0)
+        sys.exit(1)
     #
     # Parse options
     #
@@ -1453,19 +1536,28 @@ def main():
     domain = arguments.domain
 
     if arguments.ns_server:
-        if netaddr.valid_glob(arguments.ns_server):
-            ns_server = arguments.ns_server
-        else:
-            #Resolve in the case if FQDN
-            answer = socket_resolv(arguments.ns_server)
-            # Check we actually got a list
-            if len(answer) > 0:
-                # We will use the first IP found as the NS
-                ns_server = answer[0][2]
+        ns_server = []
+        ns_raw_list = list(set(arguments.ns_server.split(",")))
+        for entry in ns_raw_list:
+            if check_nxdomain_hijack(entry):
+                continue
+            if netaddr.valid_glob(entry):
+                ns_server.append(entry)
             else:
-                # Exit if we cannot resolve it
-                print_error("Could not resolve NS server provided")
-                sys.exit(1)
+                #Resolve in the case if FQDN
+                answer = socket_resolv(entry)
+                # Check we actually got a list
+                if len(answer) > 0:
+                    # We will use the first IP found as the NS
+                    ns_server.append(answer[0][2])
+                else:
+                    # Exit if we cannot resolve it
+                    print_error("Could not resolve NS server provided and server doesn't appear to be an IP: {}".format(entry))
+
+        # User specified name servers but none of them validated
+        if len(ns_server) == 0:
+            print_error("Please specify valid name servers.")
+            sys.exit(1)
 
     output_file = arguments.xml
 
@@ -1498,6 +1590,8 @@ def main():
     json_file = arguments.json
     verbose = arguments.v
     ignore_wildcardrr = arguments.iw
+    CONFIG['disable_check_recursion'] = arguments.disable_check_recursion
+    CONFIG['disable_check_bindversion'] = arguments.disable_check_bindversion
 
     xfr = arguments.a
     goo = arguments.g
@@ -1507,12 +1601,12 @@ def main():
     zonewalk = arguments.z
     spf_enum = arguments.s
     wildcard_filter = arguments.f
-
+    proto = "tcp" if arguments.tcp else "udp"
     # Setting the number of threads to 10
     pool = ThreadPool(thread_num)
 
     # Set the resolver
-    res = DnsHelper(domain, ns_server, request_timeout)
+    res = DnsHelper(domain, ns_server, request_timeout, proto)
 
     domain_req = ["axfr", "std", "srv", "tld", "goo", "bing", "crt", "zonewalk"]
     scan_info = [" ".join(sys.argv), str(datetime.datetime.now())]
@@ -1621,11 +1715,9 @@ def main():
 
                 elif r == "snoop":
                     if (dict is not None) and (ns_server is not None):
-                        print_status("Performing Cache Snooping against"
-                                     " NS Server: {0}".format(ns_server))
-                        cache_enum_records = in_cache(dict, ns_server)
-                        if (output_file is not None or results_db is not None
-                            or csv_file is not None or json_file is not None):
+                        print_status("Performing Cache Snooping against NS Server: {0}".format(ns_server))
+                        cache_enum_records = in_cache(res, dict, ns_server)
+                        if (output_file is not None) or (results_db is not None) or (csv_file is not None) or (json_file is not None):
                             returned_records.extend(cache_enum_records)
 
                     else:
@@ -1723,9 +1815,8 @@ the timeout to a higher number with --lifetime <time> option."""
             sys.exit(1)
     else:
         usage()
-        sys.exit(0)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
-
