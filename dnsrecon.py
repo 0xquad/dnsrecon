@@ -1451,7 +1451,6 @@ def usage():
     print("   -v                           Show attempts in the brute force modes.")
 
     print("Version: {0}".format(__version__))
-    print(msg)
 
 
 # Main
